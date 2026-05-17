@@ -248,30 +248,35 @@ with tab_affinity:
         keep_cols = counts.sum(axis=0).ge(min_appearances * 5)
         m = m.loc[m.index.intersection(keep_rows[keep_rows].index),
                   m.columns.intersection(keep_cols[keep_cols].index)]
-        if cluster and not m.empty:
-            m = an.reorder_by_clustering(m)
-        m.index   = [CODE_TO_NAME.get(c, c) for c in m.index]
-        m.columns = [CODE_TO_NAME.get(c, c) for c in m.columns]
-        if not cluster:
-            m = m.sort_index().sort_index(axis=1)
-        if mode == "excess":
-            zmax = float(np.nanmax(np.abs(m.values)))
-            fig = go.Figure(go.Heatmap(
-                z=m.values, x=m.columns, y=m.index,
-                colorscale="RdBu", zmid=0, zmin=-zmax, zmax=zmax,
-                colorbar=dict(title="Excess pts"),
-                hovertemplate="Voter: %{y}<br>→ %{x}<br>Excess: %{z:.2f}<extra></extra>",
-            ))
+        if m.size == 0:
+            with c1:
+                st.info("Year range / min-appearances filter leaves no data. "
+                        "Widen the year range or lower the min-appearances threshold.")
         else:
-            fig = go.Figure(go.Heatmap(
-                z=m.values, x=m.columns, y=m.index,
-                colorscale="Magma", colorbar=dict(title="Avg pts"),
-                hovertemplate="Voter: %{y}<br>→ %{x}<br>Avg: %{z:.2f}<extra></extra>",
-            ))
-        with c1:
-            fig.update_layout(height=720, plot_bgcolor="white",
-                              margin=dict(l=20, r=20, t=20, b=20))
-            st.plotly_chart(fig, width="stretch")
+            if cluster:
+                m = an.reorder_by_clustering(m)
+            m.index   = [CODE_TO_NAME.get(c, c) for c in m.index]
+            m.columns = [CODE_TO_NAME.get(c, c) for c in m.columns]
+            if not cluster:
+                m = m.sort_index().sort_index(axis=1)
+            if mode == "excess":
+                zmax = float(np.nanmax(np.abs(m.values)))
+                fig = go.Figure(go.Heatmap(
+                    z=m.values, x=m.columns, y=m.index,
+                    colorscale="RdBu", zmid=0, zmin=-zmax, zmax=zmax,
+                    colorbar=dict(title="Excess pts"),
+                    hovertemplate="Voter: %{y}<br>→ %{x}<br>Excess: %{z:.2f}<extra></extra>",
+                ))
+            else:
+                fig = go.Figure(go.Heatmap(
+                    z=m.values, x=m.columns, y=m.index,
+                    colorscale="Magma", colorbar=dict(title="Avg pts"),
+                    hovertemplate="Voter: %{y}<br>→ %{x}<br>Avg: %{z:.2f}<extra></extra>",
+                ))
+            with c1:
+                fig.update_layout(height=720, plot_bgcolor="white",
+                                  margin=dict(l=20, r=20, t=20, b=20))
+                st.plotly_chart(fig, width="stretch")
 
     st.subheader(f"Top voting affinities — {vote_type_global}")
     v = votes[(votes["round"] == "final") & votes.year.between(*yr)].copy()
@@ -403,19 +408,22 @@ with tab_patterns:
         kc = counts.sum(axis=0).ge(thr)
         m = m.loc[m.index.intersection(kr[kr].index),
                   m.columns.intersection(kc[kc].index)]
-        m = an.reorder_by_clustering(m)
-        m.index   = [CODE_TO_NAME.get(c, c) for c in m.index]
-        m.columns = [CODE_TO_NAME.get(c, c) for c in m.columns]
-        zmax = float(np.nanmax(np.abs(m.values)))
-        fig = go.Figure(go.Heatmap(
-            z=m.values, x=m.columns, y=m.index,
-            colorscale="RdBu", zmid=0, zmin=-zmax, zmax=zmax,
-            colorbar=dict(title="Excess"),
-            hovertemplate="%{y} → %{x}: %{z:.2f}<extra></extra>",
-        ))
-        fig.update_layout(height=720, plot_bgcolor="white",
-                          margin=dict(l=20, r=20, t=20, b=20))
-        st.plotly_chart(fig, width="stretch")
+        if m.size == 0:
+            st.info("Year range too narrow to show a bloc matrix — try a multi-year window.")
+        else:
+            m = an.reorder_by_clustering(m)
+            m.index   = [CODE_TO_NAME.get(c, c) for c in m.index]
+            m.columns = [CODE_TO_NAME.get(c, c) for c in m.columns]
+            zmax = float(np.nanmax(np.abs(m.values)))
+            fig = go.Figure(go.Heatmap(
+                z=m.values, x=m.columns, y=m.index,
+                colorscale="RdBu", zmid=0, zmin=-zmax, zmax=zmax,
+                colorbar=dict(title="Excess"),
+                hovertemplate="%{y} → %{x}: %{z:.2f}<extra></extra>",
+            ))
+            fig.update_layout(height=720, plot_bgcolor="white",
+                              margin=dict(l=20, r=20, t=20, b=20))
+            st.plotly_chart(fig, width="stretch")
 
     st.divider()
     st.subheader(f"Strength of canonical blocs over time — {vote_type_global}")

@@ -234,20 +234,25 @@ with tab_alltime:
     )
     metric = st.radio(
         "Metric",
-        ["Mean % of max possible (per appearance)",
-         "Cumulative % of max (sum across years)",
+        ["Mean % of max (per range year)",
+         "Mean % of max (per appearance)",
+         "Cumulative % of max",
          "Mean place (lower = better)",
          "Total raw points"],
         horizontal=False, key="alltime_metric",
         help=(
-            "- **Mean % of max** — average per-finalist normalized score. Pure performance, "
-            "doesn't reward longevity.\n"
-            "- **Cumulative % of max** — sum of per-year normalized scores. Rewards both "
-            "performance and showing up regularly.\n"
-            "- **Mean place** — average finishing position. Simplest, but mixes a "
-            "26-country and a 37-country field as equal.\n"
-            "- **Total raw points** — sum without normalization. Era-biased toward "
-            "modern years where 500+ pt totals are routine."
+            "- **Mean % of max (per range year)** — sum of per-year normalized scores "
+            "divided by total years in the selected range. **Recommended for long-term "
+            "ranking**: penalizes non-participation (a country absent that year contributes "
+            "0), and gives a comparable 0–100 score regardless of range length.\n"
+            "- **Mean % of max (per appearance)** — averages over only the years they "
+            "actually competed. Pure performance; a country that competed twice and won "
+            "both scores 100% even if absent the rest of the era.\n"
+            "- **Cumulative % of max** — straight sum. Like 'per range year' but not "
+            "normalized for range length; useful when comparing within one fixed range.\n"
+            "- **Mean place** — average final position. Simple but mixes 26- and 37-country "
+            "fields as equal, and skewed by low-N entries.\n"
+            "- **Total raw points** — era-biased toward modern years."
         ),
     )
     min_entries = st.slider("Min finals appearances in range", 1, 30, 5,
@@ -276,11 +281,24 @@ with tab_alltime:
                 .reset_index())
     agg = agg[agg.n >= min_entries]
 
+    # Per-range-year mean: divide cumulative by total years in selected range.
+    # Restrict the denominator to years that *had* finals data within the selected
+    # year/vote-type combination, so a range starting before 1957 doesn't dilute.
+    range_years = sorted(f_at.year.unique())
+    range_n = max(len(range_years), 1)
+    agg["mean_pct_per_range"] = (agg["sum_pct"] / range_n).round(2)
+
     sort_col, ascending, x_label = {
-        "Mean % of max possible (per appearance)": ("mean_pct",   False, "Mean % of max"),
-        "Cumulative % of max (sum across years)":  ("sum_pct",    False, "Cumulative % of max"),
-        "Mean place (lower = better)":             ("mean_place", True,  "Mean final place"),
-        "Total raw points":                        ("sum_pts",    False, "Total points"),
+        "Mean % of max (per range year)":  ("mean_pct_per_range", False,
+                                            f"Mean % of max (over {range_n} years)"),
+        "Mean % of max (per appearance)":  ("mean_pct",           False,
+                                            "Mean % of max per appearance"),
+        "Cumulative % of max":             ("sum_pct",            False,
+                                            "Cumulative % of max"),
+        "Mean place (lower = better)":     ("mean_place",         True,
+                                            "Mean final place"),
+        "Total raw points":                ("sum_pts",            False,
+                                            "Total points"),
     }[metric]
 
     if agg.empty:
@@ -295,7 +313,8 @@ with tab_alltime:
             color=sort_col,
             color_continuous_scale="Plasma_r" if ascending else "Plasma",
             hover_data={"n": True, "mean_place": ":.2f", "mean_pct": ":.1f",
-                        "sum_pct": ":.1f", "sum_pts": ":.0f", "to_country": False},
+                        "mean_pct_per_range": ":.1f", "sum_pct": ":.1f",
+                        "sum_pts": ":.0f", "to_country": False},
         )
         fig.update_layout(
             yaxis=dict(autorange="reversed" if not ascending else None),
@@ -309,15 +328,17 @@ with tab_alltime:
         # Full ranked table
         tbl = (agg.sort_values(sort_col, ascending=ascending).copy()
                   .assign(mean_pct=lambda d: d["mean_pct"].round(1),
+                          mean_pct_per_range=lambda d: d["mean_pct_per_range"].round(1),
                           sum_pct=lambda d: d["sum_pct"].round(1),
                           mean_place=lambda d: d["mean_place"].round(2),
                           sum_pts=lambda d: d["sum_pts"].round(0).astype(int)))
         tbl = tbl.rename(columns={
             "to_country": "Country", "n": "Appearances",
-            "mean_pct":  "Mean % of max",
-            "sum_pct":   "Cumulative % of max",
-            "mean_place":"Mean place",
-            "sum_pts":   "Total points",
+            "mean_pct":           "Mean % per appearance",
+            "mean_pct_per_range": "Mean % per range year",
+            "sum_pct":            "Cumulative % of max",
+            "mean_place":         "Mean place",
+            "sum_pts":            "Total points",
         })
         st.dataframe(tbl, hide_index=True, width="stretch")
 

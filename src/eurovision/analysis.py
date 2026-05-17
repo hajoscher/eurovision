@@ -66,6 +66,74 @@ def normalize_finals(round_: str = "final") -> pd.DataFrame:
     return f
 
 
+VOTING_ERAS = [
+    # (start, end, short_name, max_pts_per_voter_per_song, voter_budget, description)
+    (1956, 1956, "Secret jury",        None, None,
+     "Single contest with undisclosed national jury scores; full results were never published."),
+    (1957, 1961, "10 jurors, 1 vote each", 10, 10,
+     "Each country's 10 jurors picked one favourite; a song could get 0–10 from a country."),
+    (1962, 1962, "3-2-1",               3, 6,
+     "Each country awarded 3 pts to its favourite, 2 to second, 1 to third."),
+    (1963, 1963, "5-4-3-2-1",           5, 15,
+     "Each country awarded 5 pts to favourite down to 1 to fifth."),
+    (1964, 1966, "5+3+1 variants",      5, 9,
+     "5-3-1 or 6-3 systems with juror-by-juror scoring."),
+    (1967, 1970, "10 distributed votes", 10, 10,
+     "Each country's jury distributed exactly 10 votes between songs."),
+    (1971, 1973, "Two jurors × 1–5",   10, 87,
+     "Two jurors per country gave each song 1–5 pts; budget per voter ≈ 80–100."),
+    (1974, 1974, "10 jurors, free distribution", 10, 10,
+     "10 jurors per country, each one vote — distributed in any way (ABBA's Waterloo year)."),
+    (1975, 2015, "Classic 12-point system", 12, 58,
+     "Each country awards 12-10-8-7-6-5-4-3-2-1 to its ten favourites. The Eurovision system most people recognise."),
+    (2016, None, "Jury + televote split", 24, 116,
+     "From 2016, jury and televote each give 12-10-…-1 separately; max single-voter contribution doubled to 24."),
+]
+
+
+def voting_eras() -> pd.DataFrame:
+    rows = []
+    for start, end, name, max_pts, budget, desc in VOTING_ERAS:
+        end_actual = end if end is not None else 2026
+        for y in range(start, end_actual + 1):
+            rows.append({"year": y, "era": name, "max_pts_per_voter": max_pts,
+                         "voter_budget": budget})
+    return pd.DataFrame(rows)
+
+
+def participation_per_year() -> pd.DataFrame:
+    """Per year: countries that competed (incl. semi-finals)."""
+    c = ed.contestants()
+    out = (c.groupby("year")
+             .agg(n_competing=("to_country_id", "nunique"),
+                  n_finalists=("place_final", lambda s: int(s.notna().sum())))
+             .reset_index())
+    return out
+
+
+def absences_per_year() -> pd.DataFrame:
+    """For each year, count countries that competed *before* and *after* but skipped that year.
+
+    Proxy for boycotts / withdrawals — won't perfectly distinguish a true boycott
+    from financial/broadcaster reasons, but captures most discontinuities.
+    """
+    from .countries import CODE_TO_NAME
+    c = ed.contestants()[["year", "to_country_id"]].drop_duplicates()
+    years_sorted = sorted(c.year.unique())
+    by_country = c.groupby("to_country_id")
+    first_year = by_country["year"].min()
+    last_year  = by_country["year"].max()
+    rows = []
+    for y in years_sorted:
+        present = set(c[c.year == y]["to_country_id"])
+        candidates = first_year.index[(first_year <= y) & (last_year >= y)]
+        absent = sorted(code for code in candidates if code not in present)
+        absent_names = [CODE_TO_NAME.get(code, code.upper()) for code in absent]
+        rows.append({"year": y, "n_absent": len(absent),
+                     "absent_countries": ", ".join(absent_names)})
+    return pd.DataFrame(rows)
+
+
 CANONICAL_BLOCS = {
     "Nordic":   ["se", "no", "dk", "fi", "is"],
     "Baltic":   ["ee", "lv", "lt"],

@@ -78,8 +78,10 @@ st.divider()
 with st.sidebar:
     st.header("Global filters")
     st.caption(
-        "These affect the **Affinity**, **Patterns**, and **Country focus** tabs. "
-        "Year / country / vote-type selectors specific to one tab live inside that tab."
+        "Year range affects every tab. Vote type affects everywhere it's meaningful "
+        "(Affinity, Patterns, Flow map, Country focus, Winners — and toggles the "
+        "'who would have won by jury/tele' view on the Winners tab). The Year "
+        "drill-down tab has its own year picker."
     )
     yr_min, yr_max = int(votes.year.min()), int(finals.year.max())
     year_range = st.slider("Year range", yr_min, yr_max, (1975, yr_max), step=1)
@@ -107,7 +109,7 @@ def _ensure_split_years(yr: tuple[int, int]) -> tuple[int, int]:
 # ─────────────────────────────────────────────────────────────────────────────
 # Tabs
 # ─────────────────────────────────────────────────────────────────────────────
-tab_winners, tab_affinity, tab_split, tab_patterns, tab_flow, tab_predictors, tab_country, tab_year = st.tabs([
+tab_winners, tab_affinity, tab_split, tab_patterns, tab_flow, tab_predictors, tab_country, tab_year, tab_history = st.tabs([
     "🏆 Winners",
     "🔥 Affinity",
     "⚖️ Jury vs Televote",
@@ -116,11 +118,50 @@ tab_winners, tab_affinity, tab_split, tab_patterns, tab_flow, tab_predictors, ta
     "🎲 Predictors",
     "🌍 Country focus",
     "📅 Year drill-down",
+    "📊 History",
 ])
 
 # ── Winners over time ───────────────────────────────────────────────────────
 with tab_winners:
-    st.subheader("Every Eurovision winner")
+    # Vote-type-aware "winner": for jury/tele, show who would have won that year
+    # by jury-only / televote-only. Restricted to 2016+ when split exists.
+    if vote_type_global == "total":
+        w_all = finals[finals.place_final == 1].copy()
+        pts_col_w = "points_final"
+        pts_label = "Total"
+        max_per_voter = None
+    else:
+        split_col = "points_jury_final" if vote_type_global == "jury" else "points_tele_final"
+        f_split = finals.dropna(subset=[split_col])
+        idx = f_split.groupby("year")[split_col].idxmax()
+        w_all = f_split.loc[idx].copy()
+        pts_col_w = split_col
+        pts_label = "Jury" if vote_type_global == "jury" else "Televote"
+        max_per_voter = 12  # jury and televote each award up to 12 per voter
+    # Apply global year-range filter
+    w = w_all[w_all.year.between(*year_range)].copy()
+    # Recompute pct_of_max + runner-up margin against the right point column
+    if vote_type_global == "total":
+        # Already in normalize_finals()
+        pass
+    else:
+        # max possible for jury-only or tele-only = (n_voters - 1) × 12
+        w["max_possible"] = (w["n_voters"] - 1) * max_per_voter
+        w["pct_of_max"]   = (w[pts_col_w] / w["max_possible"] * 100).round(1)
+        # Runner-up by this metric (the second-highest jury/tele scorer that year)
+        runners = (finals.dropna(subset=[pts_col_w])
+                         .sort_values(["year", pts_col_w], ascending=[True, False])
+                         .groupby("year").nth(1)[pts_col_w])
+        w["runner_up_pts"] = w["year"].map(runners)
+        w["margin_ratio"]  = (w[pts_col_w] / w["runner_up_pts"]).round(3)
+
+    st.subheader(f"Every Eurovision winner ({pts_label.lower()}-points basis)"
+                 if vote_type_global != "total" else "Every Eurovision winner")
+    if vote_type_global != "total":
+        st.caption(
+            f"Showing who would have won each year if only the **{pts_label.lower()}** "
+            f"counted. Restricted to 2016+ where the jury/tele split is reported."
+        )
     score_mode = st.radio(
         "Score", ["Total points", "% of max possible", "Margin over 2nd"],
         horizontal=True, key="winners_score",
@@ -129,54 +170,59 @@ with tab_winners:
             "- **Total points** — raw, but caps changed a lot (10 pts in 1974 vs 24+ "
             "today).\n"
             "- **% of max possible** — points / ((n_voters−1) × max_per_voter). "
-            "Normalizes for voter count and the per-voter point cap. Doesn't account "
-            "for field size (more competitors → harder to dominate).\n"
+            "Normalizes for voter count and per-voter point cap.\n"
             "- **Margin over 2nd** — winner_pts / runner-up_pts. Pure field-relative "
-            "dominance. ABBA 1974 = 1.33×, Bulgaria 2026 = 1.50×, Italy 1964 = 2.88× "
-            "(the most dominant ever)."
+            "dominance. ABBA 1974 = 1.33×, Italy 1964 = 2.88× (most dominant ever)."
         ),
     )
     score_map = {
-        "Total points":      ("points_final", "Winning total points"),
+        "Total points":      (pts_col_w,      f"{pts_label} points"),
         "% of max possible": ("pct_of_max",   "% of maximum possible"),
         "Margin over 2nd":   ("margin_ratio", "Winner pts / runner-up pts"),
     }
     y_col, y_title = score_map[score_mode]
-    w = winners.dropna(subset=[y_col]).copy()
-    if score_mode == "Margin over 2nd":
-        st.caption("1969 (4-way tie) is excluded — no runner-up.")
-    fig = px.scatter(
-        w, x="year", y=y_col, text="to_country",
-        hover_data={
-            "performer": True, "song": True,
-            "points_final": ":.0f", "max_possible": ":.0f", "pct_of_max": ":.1f",
-            "runner_up_pts": ":.0f", "margin_ratio": ":.2f",
-            y_col: False, "to_country": False,
-        },
-        color=y_col, color_continuous_scale="Plasma",
-        size=y_col, size_max=22,
-    )
-    fig.update_traces(textposition="top center", textfont=dict(size=10))
-    fig.update_layout(
-        height=520, plot_bgcolor="white",
-        yaxis_title=y_title, xaxis_title=None,
-        coloraxis_showscale=False, margin=dict(l=20, r=20, t=20, b=20),
-    )
-    if score_mode == "Margin over 2nd":
-        fig.add_hline(y=1.0, line_dash="dot", line_color="grey",
-                      annotation_text="1.00 = tie", annotation_position="bottom right")
-    st.plotly_chart(fig, width="stretch")
+    w_plot = w.dropna(subset=[y_col]).copy()
+    if w_plot.empty:
+        st.warning("No winners match the current year-range / vote-type filter.")
+    else:
+        if score_mode == "Margin over 2nd":
+            st.caption("1969 (4-way tie) is excluded — no runner-up.")
+        fig = px.scatter(
+            w_plot, x="year", y=y_col, text="to_country",
+            hover_data={
+                "performer": True, "song": True,
+                pts_col_w: ":.0f", "max_possible": ":.0f", "pct_of_max": ":.1f",
+                "runner_up_pts": ":.0f", "margin_ratio": ":.2f",
+                y_col: False, "to_country": False,
+            },
+            color=y_col, color_continuous_scale="Plasma",
+            size=y_col, size_max=22,
+        )
+        fig.update_traces(textposition="top center", textfont=dict(size=10))
+        fig.update_layout(
+            height=520, plot_bgcolor="white",
+            yaxis_title=y_title, xaxis_title=None,
+            coloraxis_showscale=False, margin=dict(l=20, r=20, t=20, b=20),
+        )
+        if score_mode == "Margin over 2nd":
+            fig.add_hline(y=1.0, line_dash="dot", line_color="grey",
+                          annotation_text="1.00 = tie", annotation_position="bottom right")
+        st.plotly_chart(fig, width="stretch")
 
-    leaderboard = (winners.groupby("to_country").size()
+    leaderboard = (w.groupby("to_country").size()
                    .sort_values(ascending=False).head(15).reset_index(name="wins"))
-    st.subheader("Most-winning countries")
-    fig2 = px.bar(leaderboard, x="wins", y="to_country", orientation="h",
-                  color="wins", color_continuous_scale="Viridis", text="wins")
-    fig2.update_layout(yaxis=dict(autorange="reversed"), height=420,
-                       plot_bgcolor="white", coloraxis_showscale=False,
-                       margin=dict(l=20, r=20, t=10, b=20),
-                       xaxis_title="Wins", yaxis_title=None)
-    st.plotly_chart(fig2, width="stretch")
+    st.subheader(f"Most-winning countries ({year_range[0]}–{year_range[1]}, "
+                 f"{pts_label.lower()} basis)")
+    if leaderboard.empty:
+        st.info("No winners in this range.")
+    else:
+        fig2 = px.bar(leaderboard, x="wins", y="to_country", orientation="h",
+                      color="wins", color_continuous_scale="Viridis", text="wins")
+        fig2.update_layout(yaxis=dict(autorange="reversed"), height=420,
+                           plot_bgcolor="white", coloraxis_showscale=False,
+                           margin=dict(l=20, r=20, t=10, b=20),
+                           xaxis_title="Wins", yaxis_title=None)
+        st.plotly_chart(fig2, width="stretch")
 
 # ── Affinity heatmap ────────────────────────────────────────────────────────
 with tab_affinity:
@@ -294,9 +340,11 @@ with tab_split:
         st.plotly_chart(fig, width="stretch")
 
     st.divider()
-    st.subheader("Biggest jury-vs-televote disagreements (all years, 2016+)")
-    st.caption("Positive delta = televote loved them more; negative = jury did.")
-    sb = an.snub_boost(top_n=20).copy()
+    st.subheader(f"Biggest jury-vs-televote disagreements ({year_range[0]}–{year_range[1]})")
+    st.caption("Positive delta = televote loved them more; negative = jury did. "
+               "Filtered by the global year range (sidebar).")
+    sb = an.snub_boost(top_n=200).copy()
+    sb = sb[sb.year.between(*year_range)].head(20)
     sb["delta"] = sb["delta"].astype(int)
     sb["points_jury_final"] = sb["points_jury_final"].astype(int)
     sb["points_tele_final"] = sb["points_tele_final"].astype(int)
@@ -313,8 +361,10 @@ with tab_split:
 
     st.divider()
     st.subheader("Years the jury and the public didn't agree on the winner")
-    st.caption("Editions where the overall, jury, and televote winners weren't all the same entry.")
+    st.caption("Editions where the overall, jury, and televote winners weren't all the same entry. "
+               "Filtered by the global year range.")
     sw = an.split_winners()
+    sw = sw[sw.year.between(*year_range)]
     st.dataframe(
         sw.rename(columns={
             "year": "Year", "overall": "Overall winner", "jury": "Jury winner",
@@ -705,6 +755,7 @@ with tab_predictors:
     ro = an.running_order_effect(pv)
     if pv != "total":
         ro = ro[ro.year >= 2016]
+    ro = ro[ro.year.between(*year_range)]
     fig = px.scatter(
         ro, x="running_final", y="pts", color="place_final",
         color_continuous_scale="Plasma_r", opacity=0.6,
@@ -919,6 +970,122 @@ with tab_year:
             }),
             hide_index=True, width="stretch",
         )
+
+# ── History tab ─────────────────────────────────────────────────────────────
+with tab_history:
+    st.subheader("Voting-system eras")
+    st.caption(
+        "Eurovision's scoring system has been re-invented many times. Each era band "
+        "below shows the max points a single voter could give one entry and that voter's "
+        "total point budget."
+    )
+    era_df = an.voting_eras()
+    # Plot eras as colored vertical bands with one line for max_per_voter and one for budget
+    fig = go.Figure()
+    # Era bands
+    era_colors = px.colors.qualitative.Pastel * 3
+    for i, (start, end, name, max_pts, budget, desc) in enumerate(an.VOTING_ERAS):
+        end_a = end if end is not None else 2026
+        fig.add_vrect(
+            x0=start - 0.5, x1=end_a + 0.5,
+            fillcolor=era_colors[i], opacity=0.35, line_width=0,
+            annotation_text=name, annotation_position="top left",
+            annotation_font_size=10,
+        )
+    # Lines (drop NaN for the secret-jury year)
+    era_clean = era_df.dropna(subset=["max_pts_per_voter"])
+    fig.add_trace(go.Scatter(
+        x=era_clean["year"], y=era_clean["max_pts_per_voter"], mode="lines",
+        name="Max pts/voter to one entry",
+        line=dict(color=ESC_PINK, width=3, shape="hv"),
+    ))
+    fig.add_trace(go.Scatter(
+        x=era_clean["year"], y=era_clean["voter_budget"], mode="lines",
+        name="Voter point budget",
+        line=dict(color=ESC_BLUE, width=3, shape="hv"),
+        yaxis="y2",
+    ))
+    fig.update_layout(
+        height=460, plot_bgcolor="white", margin=dict(l=20, r=20, t=40, b=20),
+        yaxis=dict(title="Max pts per voter → one entry", side="left",
+                   range=[0, 28]),
+        yaxis2=dict(title="Voter point budget (total)", side="right",
+                    overlaying="y", range=[0, 130]),
+        legend=dict(orientation="h", y=1.05, x=0),
+    )
+    st.plotly_chart(fig, width="stretch")
+    with st.expander("Notes on each era"):
+        for start, end, name, _, _, desc in an.VOTING_ERAS:
+            end_str = f"{end}" if end is not None else "present"
+            st.markdown(f"**{start}–{end_str} · {name}** — {desc}")
+
+    st.divider()
+    st.subheader("Participating countries over time")
+    st.caption(
+        "Countries that competed at all (incl. semi-finals from 2004 onward). The "
+        "growth around 1993 reflects post-Cold-War expansion; the dip in the 1990s "
+        "reflects the relegation system; the further plateau from 2003 reflects "
+        "semi-finals taking pressure off the limit on finalist slots."
+    )
+    pp = an.participation_per_year()
+    annotations = {
+        1956: "First contest, 7 countries",
+        1993: "Eastern European expansion",
+        2004: "Semi-final introduced",
+        2008: "Two semi-finals",
+        2016: "Jury + televote split",
+        2020: "Contest cancelled (COVID)",
+        2022: "Russia banned",
+    }
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=pp["year"], y=pp["n_competing"], mode="lines+markers",
+        name="Competing", line=dict(color=ESC_BLUE, width=3),
+        marker=dict(size=6),
+    ))
+    fig.add_trace(go.Scatter(
+        x=pp["year"], y=pp["n_finalists"], mode="lines",
+        name="Finalists", line=dict(color=ESC_PINK, width=2, dash="dot"),
+    ))
+    for y, label in annotations.items():
+        if y in pp.year.values:
+            n = int(pp.loc[pp.year == y, "n_competing"].iloc[0])
+            fig.add_annotation(x=y, y=n, text=label,
+                               showarrow=True, arrowhead=2, ax=0, ay=-30,
+                               font=dict(size=10, color="#444"),
+                               bgcolor="rgba(255,255,255,0.85)", bordercolor="#888",
+                               borderwidth=1, borderpad=2)
+    fig.update_layout(
+        height=460, plot_bgcolor="white", margin=dict(l=20, r=20, t=20, b=20),
+        yaxis_title="Number of countries", xaxis_title=None,
+        legend=dict(orientation="h", y=1.05, x=0),
+    )
+    st.plotly_chart(fig, width="stretch")
+
+    st.divider()
+    st.subheader("Absences: countries that took a year off")
+    st.caption(
+        "For each year, the count of countries that had competed both *before* and "
+        "*after* that year but skipped it. A proxy for boycotts and withdrawals — "
+        "doesn't perfectly distinguish a political stance from a broadcaster's "
+        "financial pullout, but captures real discontinuities."
+    )
+    ab = an.absences_per_year()
+    fig = px.bar(ab, x="year", y="n_absent", color="n_absent",
+                 color_continuous_scale="OrRd",
+                 hover_data={"absent_countries": True, "n_absent": True, "year": False})
+    fig.update_layout(
+        height=380, plot_bgcolor="white", coloraxis_showscale=False,
+        margin=dict(l=20, r=20, t=20, b=20),
+        yaxis_title="# of countries absent that year", xaxis_title=None,
+    )
+    st.plotly_chart(fig, width="stretch")
+
+    st.markdown("**Years with the most absences**")
+    top_ab = ab.sort_values("n_absent", ascending=False).head(15).copy()
+    top_ab.columns = ["Year", "# absent", "Countries"]
+    st.dataframe(top_ab, hide_index=True, width="stretch")
+
 
 st.divider()
 st.caption(

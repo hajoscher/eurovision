@@ -609,12 +609,12 @@ with tab_flow:
                     _add_flows(fig, jury_arrows, "jury_points", color_for_pts.get(pts, ESC_PINK),
                                dash="solid", pts_label=f"jury {pts}-pt",
                                thickness_floor=1.5, thickness_scale=2.5,
-                               legend_name=f"Jury {pts}")
+                               legend_name=f"Jury {pts}", legendgroup=f"jury_{pts}")
                 if not tele_arrows.empty:
                     _add_flows(fig, tele_arrows, "tele_points", color_for_pts.get(pts, ESC_PINK),
                                dash="dot", pts_label=f"tele {pts}-pt",
                                thickness_floor=1.5, thickness_scale=2.5,
-                               legend_name=f"Tele {pts}")
+                               legend_name=f"Tele {pts}", legendgroup=f"tele_{pts}")
                 all_codes |= set(jury_arrows["from_country_id"]) | set(jury_arrows["to_country_id"])
                 all_codes |= set(tele_arrows["from_country_id"]) | set(tele_arrows["to_country_id"])
         else:
@@ -624,7 +624,7 @@ with tab_flow:
                     continue
                 _add_flows(fig, arrows, pts_col, color_for_pts.get(pts, ESC_PINK),
                            pts_label=f"{pts}-pt", thickness_floor=1.5, thickness_scale=2.5,
-                           legend_name=f"{pts} pts")
+                           legend_name=f"{pts} pts", legendgroup=f"pts_{pts}")
                 all_codes |= set(arrows["from_country_id"]) | set(arrows["to_country_id"])
 
         # Always show all competing countries for context, not just senders

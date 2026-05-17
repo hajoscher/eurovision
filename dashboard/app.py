@@ -875,9 +875,11 @@ with tab_country:
         "Score", ["Total points", "% of max possible"], horizontal=True,
         key="country_score",
     )
-    st.subheader(f"Eurovision history of {focus_country}")
+    st.subheader(f"Eurovision history of {focus_country} ({year_range[0]}–{year_range[1]})")
     code = next((c for c, n in CODE_TO_NAME.items() if n == focus_country), None)
-    cf = finals[finals["to_country"] == focus_country].sort_values("year")
+    cf = (finals[finals["to_country"] == focus_country]
+          .loc[lambda d: d.year.between(*year_range)]
+          .sort_values("year"))
     size_col = "points_final" if score_mode == "Total points" else "pct_of_max"
     cf = cf.dropna(subset=[size_col, "place_final"])
     fig = px.scatter(

@@ -254,28 +254,32 @@ def affinity_matrix(
 
 
 def reorder_by_clustering(m: pd.DataFrame) -> pd.DataFrame:
-    """Reorder rows/cols using hierarchical clustering of voting profiles.
+    """Reorder rows/cols using hierarchical clustering of voting profiles
+    plus **optimal leaf ordering** (OLO) — minimizes the sum of distances
+    between adjacent rows in the final order, so similar rows always end up
+    next to each other. Bloc structure appears as diagonal blocks.
 
-    Bloc structure shows up as diagonal blocks. Symmetrizes the matrix first
-    so voters and recipients share an ordering. No-op if matrix is too small.
+    No-op if matrix is too small.
     """
-    from scipy.cluster.hierarchy import linkage, leaves_list
+    from scipy.cluster.hierarchy import linkage, leaves_list, optimal_leaf_ordering
     from scipy.spatial.distance import squareform
 
     common = m.index.intersection(m.columns)
     if len(common) < 3:
-        return m  # need ≥3 points for meaningful clustering
+        return m
     mm = m.loc[common, common].fillna(0).values
     if mm.size == 0:
         return m
     sym = (mm + mm.T) / 2
-    # Distance = -similarity (shifted to non-negative)
     dist = sym.max() - sym
     np.fill_diagonal(dist, 0)
     if (dist != dist.T).any():
         dist = (dist + dist.T) / 2
     cond = squareform(dist, checks=False)
     z = linkage(cond, method="average")
+    # OLO: re-rotate dendrogram subtrees to minimize total adjacent-leaf distance.
+    # O(n^4) but fine for ≤50 countries.
+    z = optimal_leaf_ordering(z, cond)
     order = leaves_list(z)
     ordered = common[order]
     return m.loc[ordered, ordered]

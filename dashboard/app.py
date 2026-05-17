@@ -404,14 +404,14 @@ with tab_affinity:
                 zmax = float(np.nanmax(np.abs(m.values)))
                 fig = go.Figure(go.Heatmap(
                     z=m.values, x=m.columns, y=m.index,
-                    colorscale="RdBu", zmid=0, zmin=-zmax, zmax=zmax,
+                    colorscale="RdBu_r", zmid=0, zmin=-zmax, zmax=zmax,
                     colorbar=dict(title="Excess pts"),
                     hovertemplate="Voter: %{y}<br>→ %{x}<br>Excess: %{z:.2f}<extra></extra>",
                 ))
             else:
                 fig = go.Figure(go.Heatmap(
                     z=m.values, x=m.columns, y=m.index,
-                    colorscale="Magma", colorbar=dict(title="Avg pts"),
+                    colorscale="Blues", colorbar=dict(title="Avg pts"),
                     hovertemplate="Voter: %{y}<br>→ %{x}<br>Avg: %{z:.2f}<extra></extra>",
                 ))
             with c1:
@@ -558,7 +558,7 @@ with tab_patterns:
             zmax = float(np.nanmax(np.abs(m.values)))
             fig = go.Figure(go.Heatmap(
                 z=m.values, x=m.columns, y=m.index,
-                colorscale="RdBu", zmid=0, zmin=-zmax, zmax=zmax,
+                colorscale="RdBu_r", zmid=0, zmin=-zmax, zmax=zmax,
                 colorbar=dict(title="Excess"),
                 hovertemplate="%{y} → %{x}: %{z:.2f}<extra></extra>",
             ))

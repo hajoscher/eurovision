@@ -19,7 +19,7 @@ st.set_page_config(
     page_title="Eurovision · 1956–2026",
     page_icon="🎤",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="auto",  # collapses on narrow screens
 )
 
 ESC_BLUE = "#1A1B7C"
@@ -30,12 +30,28 @@ ESC_TEAL = "#3DCDC2"
 st.markdown(
     f"""
     <style>
-      .block-container {{ padding-top: 1.5rem; padding-bottom: 1rem; }}
+      .block-container {{ padding-top: 1.5rem; padding-bottom: 1rem;
+                          padding-left: 1rem; padding-right: 1rem; max-width: 1400px; }}
       h1, h2, h3 {{ font-family: 'Helvetica Neue', sans-serif; letter-spacing: -0.01em; }}
       .stMetric {{ background: linear-gradient(135deg, {ESC_BLUE}15, {ESC_PINK}10);
                    padding: 12px 16px; border-radius: 12px; }}
-      .stTabs [data-baseweb="tab-list"] {{ gap: 24px; }}
-      .stTabs [data-baseweb="tab"] {{ font-weight: 600; font-size: 0.95rem; }}
+      .stTabs [data-baseweb="tab-list"] {{ gap: 24px; overflow-x: auto; }}
+      .stTabs [data-baseweb="tab"] {{ font-weight: 600; font-size: 0.95rem;
+                                       white-space: nowrap; }}
+
+      /* Mobile tweaks (< 640px wide) */
+      @media (max-width: 640px) {{
+        .block-container {{ padding-left: 0.5rem; padding-right: 0.5rem;
+                            padding-top: 0.75rem; }}
+        h1 {{ font-size: 1.6rem !important; }}
+        h2 {{ font-size: 1.2rem !important; }}
+        h3 {{ font-size: 1.05rem !important; }}
+        .stMetric {{ padding: 8px 10px; }}
+        .stTabs [data-baseweb="tab-list"] {{ gap: 12px; }}
+        .stTabs [data-baseweb="tab"] {{ font-size: 0.85rem; padding: 6px 8px; }}
+        [data-testid="stMetricLabel"] {{ font-size: 0.75rem; }}
+        [data-testid="stMetricValue"] {{ font-size: 1.05rem; }}
+      }}
     </style>
     """,
     unsafe_allow_html=True,

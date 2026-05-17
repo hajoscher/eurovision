@@ -345,19 +345,24 @@ with tab_split:
                "Filtered by the global year range (sidebar).")
     sb = an.snub_boost(top_n=200).copy()
     sb = sb[sb.year.between(*year_range)].head(20)
-    sb["delta"] = sb["delta"].astype(int)
-    sb["points_jury_final"] = sb["points_jury_final"].astype(int)
-    sb["points_tele_final"] = sb["points_tele_final"].astype(int)
-    fig = px.bar(
-        sb.sort_values("delta"), x="delta", y=sb.sort_values("delta").apply(
-            lambda r: f"{int(r['year'])} · {r['to_country']} · {r['performer']}", axis=1),
-        orientation="h", color="delta", color_continuous_scale="RdBu", color_continuous_midpoint=0,
-        hover_data={"points_jury_final": True, "points_tele_final": True, "place_final": True},
-    )
-    fig.update_layout(height=560, plot_bgcolor="white", yaxis_title=None,
-                      xaxis_title="Televote − Jury", coloraxis_showscale=False,
-                      margin=dict(l=20, r=20, t=10, b=20))
-    st.plotly_chart(fig, width="stretch")
+    if sb.empty:
+        st.info("No jury/televote split data in this year range. "
+                "The split was only reported from 2016 onward — broaden the year "
+                "slider to include 2016+ to see this.")
+    else:
+        sb["delta"] = sb["delta"].astype(int)
+        sb["points_jury_final"] = sb["points_jury_final"].astype(int)
+        sb["points_tele_final"] = sb["points_tele_final"].astype(int)
+        fig = px.bar(
+            sb.sort_values("delta"), x="delta", y=sb.sort_values("delta").apply(
+                lambda r: f"{int(r['year'])} · {r['to_country']} · {r['performer']}", axis=1),
+            orientation="h", color="delta", color_continuous_scale="RdBu", color_continuous_midpoint=0,
+            hover_data={"points_jury_final": True, "points_tele_final": True, "place_final": True},
+        )
+        fig.update_layout(height=560, plot_bgcolor="white", yaxis_title=None,
+                          xaxis_title="Televote − Jury", coloraxis_showscale=False,
+                          margin=dict(l=20, r=20, t=10, b=20))
+        st.plotly_chart(fig, width="stretch")
 
     st.divider()
     st.subheader("Years the jury and the public didn't agree on the winner")
@@ -365,14 +370,17 @@ with tab_split:
                "Filtered by the global year range.")
     sw = an.split_winners()
     sw = sw[sw.year.between(*year_range)]
-    st.dataframe(
-        sw.rename(columns={
-            "year": "Year", "overall": "Overall winner", "jury": "Jury winner",
-            "tele": "Televote winner", "overall_pts": "Pts (overall)",
-            "jury_pts": "Pts (jury)", "tele_pts": "Pts (tele)",
-        }),
-        hide_index=True, width="stretch",
-    )
+    if sw.empty:
+        st.info("No data — jury/televote split is only reported from 2016 onward.")
+    else:
+        st.dataframe(
+            sw.rename(columns={
+                "year": "Year", "overall": "Overall winner", "jury": "Jury winner",
+                "tele": "Televote winner", "overall_pts": "Pts (overall)",
+                "jury_pts": "Pts (jury)", "tele_pts": "Pts (tele)",
+            }),
+            hide_index=True, width="stretch",
+        )
 
 # ── Patterns & blocs ────────────────────────────────────────────────────────
 with tab_patterns:
@@ -756,30 +764,41 @@ with tab_predictors:
     if pv != "total":
         ro = ro[ro.year >= 2016]
     ro = ro[ro.year.between(*year_range)]
-    fig = px.scatter(
-        ro, x="running_final", y="pts", color="place_final",
-        color_continuous_scale="Plasma_r", opacity=0.6,
-        hover_data=["year", "to_country", "performer", "song", "place_final"],
-        trendline="lowess",
-    )
-    fig.update_layout(height=460, plot_bgcolor="white",
-                      xaxis_title="Running order (1 = opens show)",
-                      yaxis_title={"total": "Total points",
-                                   "jury":  "Jury points",
-                                   "tele":  "Televote points"}[pv],
-                      coloraxis_colorbar=dict(title="Place"),
-                      margin=dict(l=20, r=20, t=10, b=20))
-    st.plotly_chart(fig, width="stretch")
+    if ro.empty:
+        st.info(
+            f"No data for this combination. Jury/televote running-order data only "
+            f"exists from 2016 onward; year-range slider is {year_range[0]}–"
+            f"{year_range[1]}."
+        )
+        fig = None
+    else:
+        fig = px.scatter(
+            ro, x="running_final", y="pts", color="place_final",
+            color_continuous_scale="Plasma_r", opacity=0.6,
+            hover_data=["year", "to_country", "performer", "song", "place_final"],
+            trendline="lowess",
+        )
+    if fig is not None:
+        fig.update_layout(height=460, plot_bgcolor="white",
+                          xaxis_title="Running order (1 = opens show)",
+                          yaxis_title={"total": "Total points",
+                                       "jury":  "Jury points",
+                                       "tele":  "Televote points"}[pv],
+                          coloraxis_colorbar=dict(title="Place"),
+                          margin=dict(l=20, r=20, t=10, b=20))
+        st.plotly_chart(fig, width="stretch")
 
-    avg_by_slot = ro.groupby("running_final").agg(
-        mean_pts=("pts", "mean"), n=("pts", "size")).reset_index()
-    avg_by_slot = avg_by_slot[avg_by_slot.n >= 5]
-    fig2 = px.bar(avg_by_slot, x="running_final", y="mean_pts",
-                  color="mean_pts", color_continuous_scale="Plasma",
-                  labels={"running_final": "Running-order slot", "mean_pts": "Mean points"})
-    fig2.update_layout(height=320, plot_bgcolor="white", coloraxis_showscale=False,
-                       margin=dict(l=20, r=20, t=10, b=20))
-    st.plotly_chart(fig2, width="stretch")
+        avg_by_slot = ro.groupby("running_final").agg(
+            mean_pts=("pts", "mean"), n=("pts", "size")).reset_index()
+        avg_by_slot = avg_by_slot[avg_by_slot.n >= 5]
+        if not avg_by_slot.empty:
+            fig2 = px.bar(avg_by_slot, x="running_final", y="mean_pts",
+                          color="mean_pts", color_continuous_scale="Plasma",
+                          labels={"running_final": "Running-order slot",
+                                  "mean_pts": "Mean points"})
+            fig2.update_layout(height=320, plot_bgcolor="white", coloraxis_showscale=False,
+                               margin=dict(l=20, r=20, t=10, b=20))
+            st.plotly_chart(fig2, width="stretch")
 
     st.divider()
     st.subheader("Language effect on placement")

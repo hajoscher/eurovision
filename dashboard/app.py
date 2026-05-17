@@ -235,21 +235,17 @@ with tab_alltime:
     metric = st.radio(
         "Metric",
         ["Mean % of max (per range year)",
-         "Mean % of max (per appearance)",
          "Cumulative % of max",
          "Mean place (lower = better)",
          "Total raw points"],
         horizontal=False, key="alltime_metric",
         help=(
             "- **Mean % of max (per range year)** — sum of per-year normalized scores "
-            "divided by total years in the selected range. **Recommended for long-term "
-            "ranking**: penalizes non-participation (a country absent that year contributes "
-            "0), and gives a comparable 0–100 score regardless of range length.\n"
-            "- **Mean % of max (per appearance)** — averages over only the years they "
-            "actually competed. Pure performance; a country that competed twice and won "
-            "both scores 100% even if absent the rest of the era.\n"
-            "- **Cumulative % of max** — straight sum. Like 'per range year' but not "
-            "normalized for range length; useful when comparing within one fixed range.\n"
+            "divided by total years in the selected range. **Recommended**: penalizes "
+            "non-participation (a country absent that year contributes 0), comparable "
+            "0–100 scale regardless of range length.\n"
+            "- **Cumulative % of max** — straight sum. Same ordering as 'per range year' "
+            "but not normalized; useful within one fixed range.\n"
             "- **Mean place** — average final position. Simple but mixes 26- and 37-country "
             "fields as equal, and skewed by low-N entries.\n"
             "- **Total raw points** — era-biased toward modern years."
@@ -291,8 +287,6 @@ with tab_alltime:
     sort_col, ascending, x_label = {
         "Mean % of max (per range year)":  ("mean_pct_per_range", False,
                                             f"Mean % of max (over {range_n} years)"),
-        "Mean % of max (per appearance)":  ("mean_pct",           False,
-                                            "Mean % of max per appearance"),
         "Cumulative % of max":             ("sum_pct",            False,
                                             "Cumulative % of max"),
         "Mean place (lower = better)":     ("mean_place",         True,

@@ -908,13 +908,15 @@ with tab_country:
         pts_col = an.POINTS_COL[vote_type_global]
         v = votes[(votes["round"] == "final") & votes.year.between(*yr)]
         v = v[v[pts_col].notna()]
+        # Scale min joint years with the selected range — single year ⇒ 1, wide ⇒ 3
+        min_joint = min(3, yr[1] - yr[0] + 1)
         col1, col2 = st.columns(2)
         with col1:
             st.subheader(f"Top fans of {focus_country} ({vote_type_global})")
             fans = (v[v.to_country_id == code]
                     .groupby("from_country_id")[pts_col].agg(["mean", "count"]).reset_index()
                     .rename(columns={"from_country_id": "voter"}))
-            fans = fans[fans["count"] >= 3].sort_values("mean", ascending=False).head(12)
+            fans = fans[fans["count"] >= min_joint].sort_values("mean", ascending=False).head(12)
             fans["voter"] = fans["voter"].map(CODE_TO_NAME).fillna(fans["voter"])
             fig = px.bar(fans, x="mean", y="voter", orientation="h",
                          color="mean", color_continuous_scale="Magma", text="mean")
@@ -930,7 +932,7 @@ with tab_country:
             sent = (v[v.from_country_id == code]
                     .groupby("to_country_id")[pts_col].agg(["mean", "count"]).reset_index()
                     .rename(columns={"to_country_id": "recipient"}))
-            sent = sent[sent["count"] >= 3].sort_values("mean", ascending=False).head(12)
+            sent = sent[sent["count"] >= min_joint].sort_values("mean", ascending=False).head(12)
             sent["recipient"] = sent["recipient"].map(CODE_TO_NAME).fillna(sent["recipient"])
             fig = px.bar(sent, x="mean", y="recipient", orientation="h",
                          color="mean", color_continuous_scale="Viridis", text="mean")

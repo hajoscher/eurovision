@@ -1063,28 +1063,44 @@ with tab_history:
     st.plotly_chart(fig, width="stretch")
 
     st.divider()
-    st.subheader("Absences: countries that took a year off")
+    st.subheader("Non-participation by year")
     st.caption(
         "For each year, the count of countries that had competed both *before* and "
-        "*after* that year but skipped it. A proxy for boycotts and withdrawals — "
-        "doesn't perfectly distinguish a political stance from a broadcaster's "
-        "financial pullout, but captures real discontinuities."
+        "*after* that year but didn't compete in it. **This conflates several different "
+        "kinds of absence:**\n"
+        "- *Voluntary boycotts* (Sweden 1976, Greece-Turkey 1970s/80s)\n"
+        "- *Financial / scheduling withdrawals* (Bulgaria 2024, various NL/IT 1980s)\n"
+        "- *Forced relegation* (1996–2003 system that excluded bottom-finishers — "
+        "drives the big spike around 2000–2002, not boycotts)\n"
+        "- *EBU bans* (Russia 2022+, Belarus 2021+)\n"
+        "- *Contest cancellation* (2020 COVID)\n\n"
+        "See the curated table below for cases where the reason is documented."
     )
     ab = an.absences_per_year()
-    fig = px.bar(ab, x="year", y="n_absent", color="n_absent",
-                 color_continuous_scale="OrRd",
-                 hover_data={"absent_countries": True, "n_absent": True, "year": False})
+    # Shade the relegation era so users can mentally subtract it
+    fig = go.Figure()
+    fig.add_vrect(x0=1995.5, x1=2003.5, fillcolor="#cccccc", opacity=0.35,
+                  line_width=0, annotation_text="Relegation era",
+                  annotation_position="top left", annotation_font_size=10)
+    fig.add_trace(go.Bar(
+        x=ab["year"], y=ab["n_absent"],
+        marker=dict(color=ab["n_absent"], colorscale="OrRd"),
+        customdata=ab["absent_countries"],
+        hovertemplate="<b>%{x}</b><br>%{y} country(ies) absent<br>"
+                      "%{customdata}<extra></extra>",
+    ))
     fig.update_layout(
-        height=380, plot_bgcolor="white", coloraxis_showscale=False,
+        height=380, plot_bgcolor="white",
         margin=dict(l=20, r=20, t=20, b=20),
-        yaxis_title="# of countries absent that year", xaxis_title=None,
+        yaxis_title="# of countries non-participating", xaxis_title=None,
     )
     st.plotly_chart(fig, width="stretch")
 
-    st.markdown("**Years with the most absences**")
-    top_ab = ab.sort_values("n_absent", ascending=False).head(15).copy()
-    top_ab.columns = ["Year", "# absent", "Countries"]
-    st.dataframe(top_ab, hide_index=True, width="stretch")
+    st.markdown("**Notable boycotts, withdrawals, and bans (curated)**")
+    st.caption("Hand-collected from Wikipedia. Not exhaustive.")
+    nb = pd.DataFrame(an.NOTABLE_ABSENCES,
+                      columns=["Year", "Country/-ies", "Kind", "Reason"])
+    st.dataframe(nb.sort_values("Year"), hide_index=True, width="stretch")
 
 
 st.divider()

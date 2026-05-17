@@ -112,26 +112,82 @@ def participation_per_year() -> pd.DataFrame:
 
 
 def absences_per_year() -> pd.DataFrame:
-    """For each year, count countries that competed *before* and *after* but skipped that year.
+    """For each year, count countries that competed nearby in time but skipped that year.
 
-    Proxy for boycotts / withdrawals — won't perfectly distinguish a true boycott
-    from financial/broadcaster reasons, but captures most discontinuities.
+    A country counts as "absent" in year Y if it competed at least once in the prior
+    5 years (Y-5 .. Y-1) AND at least once in the next 5 years (Y+1 .. Y+5). For the
+    most recent few years where there is no "future" yet, just having recent past
+    participation is enough.
+
+    Proxy for boycotts / withdrawals — doesn't distinguish a true boycott from
+    a financial/broadcaster pullout or a forced relegation (1996–2003).
     """
     from .countries import CODE_TO_NAME
     c = ed.contestants()[["year", "to_country_id"]].drop_duplicates()
     years_sorted = sorted(c.year.unique())
-    by_country = c.groupby("to_country_id")
-    first_year = by_country["year"].min()
-    last_year  = by_country["year"].max()
+    max_year = max(years_sorted)
+    by_year_codes = {y: set(c[c.year == y]["to_country_id"]) for y in years_sorted}
     rows = []
     for y in years_sorted:
-        present = set(c[c.year == y]["to_country_id"])
-        candidates = first_year.index[(first_year <= y) & (last_year >= y)]
+        present = by_year_codes[y]
+        # Recent past competitors (last 5 years)
+        past = set().union(*(by_year_codes.get(yp, set()) for yp in range(y - 5, y)))
+        # Next-5 future competitors
+        future = set().union(*(by_year_codes.get(yf, set()) for yf in range(y + 1, y + 6)))
+        if y >= max_year - 1:
+            # Not enough future data — accept anyone with recent past participation
+            candidates = past
+        else:
+            candidates = past & future
         absent = sorted(code for code in candidates if code not in present)
         absent_names = [CODE_TO_NAME.get(code, code.upper()) for code in absent]
         rows.append({"year": y, "n_absent": len(absent),
                      "absent_countries": ", ".join(absent_names)})
     return pd.DataFrame(rows)
+
+
+NOTABLE_ABSENCES = [
+    # (year, country, kind, note)
+    (1970, "Austria, Finland, Norway, Portugal, Sweden", "boycott",
+     "Protested the 4-way tie at 1969 (four-way winners with no tiebreaker)."),
+    (1974, "Greece", "boycott",
+     "Following the Turkish invasion of Cyprus."),
+    (1975, "Greece, Malta, Turkey", "boycott / withdrawal",
+     "Greece boycotted in response to Turkey's debut; Malta withdrew for financial reasons."),
+    (1976, "Greece, Sweden, Yugoslavia", "boycott",
+     "Sweden refused to host again citing cost; Greece boycotted over Turkey's entry."),
+    (1978, "Tunisia", "withdrew",
+     "Withdrew at the last moment in protest of Israel's participation."),
+    (1979, "Turkey", "boycott",
+     "Refused to compete in Jerusalem; pressured by other Arab broadcasters."),
+    (1980, "Israel", "did not enter",
+     "Israel could not host (date conflicted with Yom HaZikaron) and chose not to compete."),
+    (1981, "Israel, Turkey, Yugoslavia", "various",
+     "Israel: religious-calendar conflict. Turkey: continued Israel-related boycott."),
+    (1982, "France, Greece", "withdrew", "Financial / programming reasons."),
+    (1985, "Greece, Israel, Netherlands, Yugoslavia", "withdrew",
+     "Netherlands: scheduling conflict (Remembrance Day). Israel: Holocaust Remembrance Day."),
+    (1986, "Greece, Italy, Netherlands, Yugoslavia", "withdrew",
+     "Italy: declining domestic interest. Netherlands: budget / scheduling."),
+    (1991, "Yugoslavia", "broke up", "Last entry as Yugoslavia before dissolution."),
+    (1994, "Germany, Italy", "relegated",
+     "First year of the relegation system — bottom-ranked countries forced out."),
+    (1996, "Germany, Romania, others", "qualifier failure",
+     "Pre-televised audio qualifier; some countries didn't make it through."),
+    (1996, "Several", "relegated", "Relegation continued."),
+    (2020, "All", "contest cancelled",
+     "COVID-19: only contest ever cancelled. Songs were celebrated in 'Europe Shine a Light'."),
+    (2022, "Russia", "banned",
+     "Excluded by the EBU after the invasion of Ukraine."),
+    (2021, "Belarus", "banned",
+     "Excluded after the BTRC submitted a politically partisan entry rejected by the EBU."),
+    (2024, "Bulgaria", "withdrew", "Cited financial constraints."),
+    (2025, "Romania, Moldova", "withdrew", "Financial / strategic reasons."),
+    (2026, "Spain, Ireland, Iceland, Slovenia, Netherlands", "boycott",
+     "Refused to participate over Israel's continued inclusion amid the Gaza war "
+     "and the EBU's refusal to exclude Israel (cited as a double-standard versus "
+     "the Russia ban). Largest single-event boycott since 1970."),
+]
 
 
 CANONICAL_BLOCS = {

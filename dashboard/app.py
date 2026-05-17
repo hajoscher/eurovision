@@ -84,7 +84,7 @@ with st.sidebar:
         "drill-down tab has its own year picker."
     )
     yr_min, yr_max = int(votes.year.min()), int(finals.year.max())
-    year_range = st.slider("Year range", yr_min, yr_max, (1975, yr_max), step=1)
+    year_range = st.slider("Year range", yr_min, yr_max, (yr_min, yr_max), step=1)
     vote_type_global = st.radio(
         "Vote type",
         options=["total", "jury", "tele"],

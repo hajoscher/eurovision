@@ -109,8 +109,9 @@ def _ensure_split_years(yr: tuple[int, int]) -> tuple[int, int]:
 # ─────────────────────────────────────────────────────────────────────────────
 # Tabs
 # ─────────────────────────────────────────────────────────────────────────────
-tab_winners, tab_affinity, tab_split, tab_patterns, tab_flow, tab_predictors, tab_country, tab_year, tab_history = st.tabs([
+tab_winners, tab_alltime, tab_affinity, tab_split, tab_patterns, tab_flow, tab_predictors, tab_country, tab_year, tab_history = st.tabs([
     "🏆 Winners",
+    "🥇 All-time",
     "🔥 Affinity",
     "⚖️ Jury vs Televote",
     "🧭 Patterns & blocs",
@@ -223,6 +224,103 @@ with tab_winners:
                            margin=dict(l=20, r=20, t=10, b=20),
                            xaxis_title="Wins", yaxis_title=None)
         st.plotly_chart(fig2, width="stretch")
+
+# ── All-time leaderboard ────────────────────────────────────────────────────
+with tab_alltime:
+    st.subheader(f"All-time leaderboard ({year_range[0]}–{year_range[1]})")
+    st.caption(
+        "Long-term performance ranking. Pick a metric that captures what you mean "
+        "by 'best country'. Vote type and year range come from the sidebar."
+    )
+    metric = st.radio(
+        "Metric",
+        ["Mean % of max possible (per appearance)",
+         "Cumulative % of max (sum across years)",
+         "Mean place (lower = better)",
+         "Total raw points"],
+        horizontal=False, key="alltime_metric",
+        help=(
+            "- **Mean % of max** — average per-finalist normalized score. Pure performance, "
+            "doesn't reward longevity.\n"
+            "- **Cumulative % of max** — sum of per-year normalized scores. Rewards both "
+            "performance and showing up regularly.\n"
+            "- **Mean place** — average finishing position. Simplest, but mixes a "
+            "26-country and a 37-country field as equal.\n"
+            "- **Total raw points** — sum without normalization. Era-biased toward "
+            "modern years where 500+ pt totals are routine."
+        ),
+    )
+    min_entries = st.slider("Min finals appearances in range", 1, 30, 5,
+                            key="alltime_min_n")
+
+    # Pick the right point column and per-year max-possible for the chosen vote_type
+    pts_col_at = ("points_jury_final" if vote_type_global == "jury"
+                  else "points_tele_final" if vote_type_global == "tele"
+                  else "points_final")
+    f_at = finals[finals.year.between(*year_range)].copy()
+    f_at = f_at.dropna(subset=[pts_col_at, "place_final"])
+    if vote_type_global == "total":
+        f_at["max_for_type"] = f_at["max_possible"]
+    else:
+        # jury / tele each cap at 12 per voter
+        f_at["max_for_type"] = (f_at["n_voters"] - 1) * 12
+    f_at["score_pct"] = (f_at[pts_col_at] / f_at["max_for_type"] * 100).replace(
+        [np.inf, -np.inf], np.nan)
+
+    agg = (f_at.groupby("to_country")
+                .agg(n=("year", "size"),
+                     sum_pts=(pts_col_at, "sum"),
+                     sum_pct=("score_pct", "sum"),
+                     mean_pct=("score_pct", "mean"),
+                     mean_place=("place_final", "mean"))
+                .reset_index())
+    agg = agg[agg.n >= min_entries]
+
+    sort_col, ascending, x_label = {
+        "Mean % of max possible (per appearance)": ("mean_pct",   False, "Mean % of max"),
+        "Cumulative % of max (sum across years)":  ("sum_pct",    False, "Cumulative % of max"),
+        "Mean place (lower = better)":             ("mean_place", True,  "Mean final place"),
+        "Total raw points":                        ("sum_pts",    False, "Total points"),
+    }[metric]
+
+    if agg.empty:
+        st.info("No countries match the current filters. Lower the min-appearances "
+                "threshold or widen the year range.")
+    else:
+        top = agg.sort_values(sort_col, ascending=ascending).head(25).copy()
+        # Bar chart
+        fig = px.bar(
+            top.sort_values(sort_col, ascending=ascending),
+            x=sort_col, y="to_country", orientation="h",
+            color=sort_col,
+            color_continuous_scale="Plasma_r" if ascending else "Plasma",
+            hover_data={"n": True, "mean_place": ":.2f", "mean_pct": ":.1f",
+                        "sum_pct": ":.1f", "sum_pts": ":.0f", "to_country": False},
+        )
+        fig.update_layout(
+            yaxis=dict(autorange="reversed" if not ascending else None),
+            height=max(450, 22 * len(top)),
+            plot_bgcolor="white", coloraxis_showscale=False,
+            xaxis_title=x_label, yaxis_title=None,
+            margin=dict(l=20, r=20, t=10, b=20),
+        )
+        st.plotly_chart(fig, width="stretch")
+
+        # Full ranked table
+        tbl = (agg.sort_values(sort_col, ascending=ascending).copy()
+                  .assign(mean_pct=lambda d: d["mean_pct"].round(1),
+                          sum_pct=lambda d: d["sum_pct"].round(1),
+                          mean_place=lambda d: d["mean_place"].round(2),
+                          sum_pts=lambda d: d["sum_pts"].round(0).astype(int)))
+        tbl = tbl.rename(columns={
+            "to_country": "Country", "n": "Appearances",
+            "mean_pct":  "Mean % of max",
+            "sum_pct":   "Cumulative % of max",
+            "mean_place":"Mean place",
+            "sum_pts":   "Total points",
+        })
+        st.dataframe(tbl, hide_index=True, width="stretch")
+
 
 # ── Affinity heatmap ────────────────────────────────────────────────────────
 with tab_affinity:

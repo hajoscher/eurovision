@@ -72,6 +72,18 @@ finals = an.normalize_finals()   # adds max_possible, pct_of_max, total_awarded,
 votes = ed.votes()
 winners = finals[finals.place_final == 1].sort_values("year")
 
+# Mobile-friendly chart config: disable drag-to-zoom/select so touch goes to
+# page scroll, and hide the mode bar (it's mostly desktop-only export tools).
+PLOTLY_CONFIG = {"scrollZoom": False, "displayModeBar": False, "doubleClick": "reset"}
+
+
+def render_plot(fig: go.Figure, *, height: int | None = None) -> None:
+    """Helper to render plotly figures with mobile-friendly defaults."""
+    fig.update_layout(dragmode=False)
+    if height is not None:
+        fig.update_layout(height=height)
+    st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG)
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Headline metrics
 # ─────────────────────────────────────────────────────────────────────────────
@@ -224,7 +236,7 @@ with tab_winners:
         if score_mode == "Margin over 2nd":
             fig.add_hline(y=1.0, line_dash="dot", line_color="grey",
                           annotation_text="1.00 = tie", annotation_position="bottom right")
-        st.plotly_chart(fig, width="stretch")
+        render_plot(fig)
 
     leaderboard = (w.groupby("to_country").size()
                    .sort_values(ascending=False).head(15).reset_index(name="wins"))
@@ -239,7 +251,7 @@ with tab_winners:
                            plot_bgcolor="white", coloraxis_showscale=False,
                            margin=dict(l=20, r=20, t=10, b=20),
                            xaxis_title="Wins", yaxis_title=None)
-        st.plotly_chart(fig2, width="stretch")
+        render_plot(fig2)
 
 # ── All-time leaderboard ────────────────────────────────────────────────────
 with tab_alltime:
@@ -333,7 +345,7 @@ with tab_alltime:
             xaxis_title=x_label, yaxis_title=None,
             margin=dict(l=20, r=20, t=10, b=20),
         )
-        st.plotly_chart(fig, width="stretch")
+        render_plot(fig)
 
         # Full ranked table
         tbl = (agg.sort_values(sort_col, ascending=ascending).copy()
@@ -405,7 +417,7 @@ with tab_affinity:
             with c1:
                 fig.update_layout(height=720, plot_bgcolor="white",
                                   margin=dict(l=20, r=20, t=20, b=20))
-                st.plotly_chart(fig, width="stretch")
+                render_plot(fig)
 
     st.subheader(f"Top voting affinities — {vote_type_global}")
     v = votes[(votes["round"] == "final") & votes.year.between(*yr)].copy()
@@ -471,7 +483,7 @@ with tab_split:
             yaxis=dict(title=None), legend=dict(orientation="h", y=1.05, x=0),
         )
         fig.add_vline(x=0, line_color="#333", line_width=1)
-        st.plotly_chart(fig, width="stretch")
+        render_plot(fig)
 
     st.divider()
     st.subheader(f"Biggest jury-vs-televote disagreements ({year_range[0]}–{year_range[1]})")
@@ -496,7 +508,7 @@ with tab_split:
         fig.update_layout(height=560, plot_bgcolor="white", yaxis_title=None,
                           xaxis_title="Televote − Jury", coloraxis_showscale=False,
                           margin=dict(l=20, r=20, t=10, b=20))
-        st.plotly_chart(fig, width="stretch")
+        render_plot(fig)
 
     st.divider()
     st.subheader("Years the jury and the public didn't agree on the winner")
@@ -552,7 +564,7 @@ with tab_patterns:
             ))
             fig.update_layout(height=720, plot_bgcolor="white",
                               margin=dict(l=20, r=20, t=20, b=20))
-            st.plotly_chart(fig, width="stretch")
+            render_plot(fig)
 
     st.divider()
     st.subheader(f"Strength of canonical blocs over time — {vote_type_global}")
@@ -565,7 +577,7 @@ with tab_patterns:
                       yaxis_title="Avg points exchanged within bloc",
                       xaxis_title=None,
                       margin=dict(l=20, r=20, t=10, b=20))
-    st.plotly_chart(fig, width="stretch")
+    render_plot(fig)
 
     st.divider()
     st.subheader(f"Bilateral surprises · {vote_type_global}")
@@ -768,7 +780,7 @@ with tab_flow:
         all_codes |= set(v_yr["from_country_id"]) | set(v_yr["to_country_id"])
         _add_country_markers(fig, all_codes)
         fig.update_layout(legend=dict(orientation="h", y=1.05, x=0))
-        st.plotly_chart(fig, width="stretch")
+        render_plot(fig)
         st.caption("Solid lines = jury, dotted = televote (when both shown). "
                    "12 = pink, 10 = gold, 8 = teal, 7 = blue, 6 = brown.")
 
@@ -798,7 +810,7 @@ with tab_flow:
                        thickness_floor=1.0, thickness_scale=7.0)
             codes = set(flow["from_country_id"]) | set(flow["to_country_id"])
             _add_country_markers(fig, codes)
-        st.plotly_chart(fig, width="stretch")
+        render_plot(fig)
 
         if not flow.empty:
             ranked = flow.copy()
@@ -867,7 +879,7 @@ with tab_flow:
                  | {fc_code})
         _add_country_markers(fig, codes)
         fig.update_layout(legend=dict(orientation="h", y=1.05, x=0))
-        st.plotly_chart(fig, width="stretch")
+        render_plot(fig)
 
         c_out, c_in = st.columns(2)
         c_out.markdown(f"**{CODE_TO_NAME.get(fc_code, fc_code)} → others (avg pts sent)**")
@@ -923,7 +935,7 @@ with tab_predictors:
                                        "tele":  "Televote points"}[pv],
                           coloraxis_colorbar=dict(title="Place"),
                           margin=dict(l=20, r=20, t=10, b=20))
-        st.plotly_chart(fig, width="stretch")
+        render_plot(fig)
 
         avg_by_slot = ro.groupby("running_final").agg(
             mean_pts=("pts", "mean"), n=("pts", "size")).reset_index()
@@ -935,7 +947,7 @@ with tab_predictors:
                                   "mean_pts": "Mean points"})
             fig2.update_layout(height=320, plot_bgcolor="white", coloraxis_showscale=False,
                                margin=dict(l=20, r=20, t=10, b=20))
-            st.plotly_chart(fig2, width="stretch")
+            render_plot(fig2)
 
     st.divider()
     st.subheader("Language effect on placement")
@@ -968,7 +980,7 @@ with tab_predictors:
         fig.update_yaxes(autorange="reversed", title="Final placement (1 = win)")
         fig.update_layout(height=420, plot_bgcolor="white", showlegend=False,
                           xaxis_title=None, margin=dict(l=20, r=20, t=10, b=20))
-        st.plotly_chart(fig, width="stretch")
+        render_plot(fig)
         summary = (cont.groupby("lang_bucket")
                    .agg(median_place=("place_final", "median"),
                         mean_place=("place_final", "mean"),
@@ -1031,7 +1043,7 @@ with tab_country:
     fig.update_yaxes(autorange="reversed", title="Final placement")
     fig.update_layout(height=420, plot_bgcolor="white", coloraxis_showscale=False,
                       margin=dict(l=20, r=20, t=20, b=20))
-    st.plotly_chart(fig, width="stretch")
+    render_plot(fig)
 
     if code:
         pts_col = an.POINTS_COL[vote_type_global]
@@ -1054,7 +1066,7 @@ with tab_country:
                               plot_bgcolor="white", coloraxis_showscale=False,
                               xaxis_title="Avg pts given", yaxis_title=None,
                               margin=dict(l=20, r=20, t=10, b=20))
-            st.plotly_chart(fig, width="stretch")
+            render_plot(fig)
 
         with col2:
             st.subheader(f"{focus_country}'s top recipients ({vote_type_global})")
@@ -1070,7 +1082,7 @@ with tab_country:
                               plot_bgcolor="white", coloraxis_showscale=False,
                               xaxis_title="Avg pts received", yaxis_title=None,
                               margin=dict(l=20, r=20, t=10, b=20))
-            st.plotly_chart(fig, width="stretch")
+            render_plot(fig)
 
 # ── Year drill-down ─────────────────────────────────────────────────────────
 with tab_year:
@@ -1107,7 +1119,7 @@ with tab_year:
                 margin=dict(l=20, r=20, t=10, b=20), xaxis_title="Points",
                 yaxis_title=None, legend_title=None,
             )
-            st.plotly_chart(fig, width="stretch")
+            render_plot(fig)
         else:
             fig = px.bar(
                 fy.sort_values("points_final"), x="points_final", y="to_country",
@@ -1117,7 +1129,7 @@ with tab_year:
             fig.update_layout(height=max(420, 26 * len(fy)), plot_bgcolor="white",
                               coloraxis_showscale=False, yaxis_title=None,
                               margin=dict(l=20, r=20, t=10, b=20))
-            st.plotly_chart(fig, width="stretch")
+            render_plot(fig)
 
         st.dataframe(
             fy[["place_final", "to_country", "performer", "song",
@@ -1173,7 +1185,7 @@ with tab_history:
                     overlaying="y", range=[0, 130]),
         legend=dict(orientation="h", y=1.05, x=0),
     )
-    st.plotly_chart(fig, width="stretch")
+    render_plot(fig)
     with st.expander("Notes on each era"):
         for start, end, name, _, _, desc in an.VOTING_ERAS:
             end_str = f"{end}" if end is not None else "present"
@@ -1220,7 +1232,7 @@ with tab_history:
         yaxis_title="Number of countries", xaxis_title=None,
         legend=dict(orientation="h", y=1.05, x=0),
     )
-    st.plotly_chart(fig, width="stretch")
+    render_plot(fig)
 
     st.divider()
     st.subheader("Non-participation by year")
@@ -1254,7 +1266,7 @@ with tab_history:
         margin=dict(l=20, r=20, t=20, b=20),
         yaxis_title="# of countries non-participating", xaxis_title=None,
     )
-    st.plotly_chart(fig, width="stretch")
+    render_plot(fig)
 
     st.markdown("**Notable boycotts, withdrawals, and bans (curated)**")
     st.caption("Hand-collected from Wikipedia. Not exhaustive.")

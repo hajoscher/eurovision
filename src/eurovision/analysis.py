@@ -257,13 +257,17 @@ def reorder_by_clustering(m: pd.DataFrame) -> pd.DataFrame:
     """Reorder rows/cols using hierarchical clustering of voting profiles.
 
     Bloc structure shows up as diagonal blocks. Symmetrizes the matrix first
-    so voters and recipients share an ordering.
+    so voters and recipients share an ordering. No-op if matrix is too small.
     """
     from scipy.cluster.hierarchy import linkage, leaves_list
     from scipy.spatial.distance import squareform
 
     common = m.index.intersection(m.columns)
+    if len(common) < 3:
+        return m  # need ≥3 points for meaningful clustering
     mm = m.loc[common, common].fillna(0).values
+    if mm.size == 0:
+        return m
     sym = (mm + mm.T) / 2
     # Distance = -similarity (shifted to non-negative)
     dist = sym.max() - sym

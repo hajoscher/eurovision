@@ -72,14 +72,13 @@ finals = an.normalize_finals()   # adds max_possible, pct_of_max, total_awarded,
 votes = ed.votes()
 winners = finals[finals.place_final == 1].sort_values("year")
 
-# Mobile-friendly chart config: disable drag-to-zoom/select so touch goes to
-# page scroll, and hide the mode bar (it's mostly desktop-only export tools).
-PLOTLY_CONFIG = {"scrollZoom": False, "displayModeBar": False, "doubleClick": "reset"}
+# Default Plotly config — full desktop interactivity (drag-to-zoom, modebar, etc).
+# Mobile users will get the default touch behavior, which hijacks scroll on charts.
+PLOTLY_CONFIG = {"doubleClick": "reset"}
 
 
 def render_plot(fig: go.Figure, *, height: int | None = None) -> None:
-    """Helper to render plotly figures with mobile-friendly defaults."""
-    fig.update_layout(dragmode=False)
+    """Render a plotly figure with our standard config."""
     if height is not None:
         fig.update_layout(height=height)
     st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG)
